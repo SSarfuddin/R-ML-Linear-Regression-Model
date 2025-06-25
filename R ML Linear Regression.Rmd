@@ -1,0 +1,886 @@
+---
+title: "R ML Linear Regression Model"
+author: "Shah Sarfuddin"
+date: "15/06/2025"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+
+
+# Load Libraries and Dataset
+
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(readr)
+library(crayon)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(caret)
+library(reshape2)  
+library(glmnet)
+
+```
+
+
+
+# Load Dataset "moskow_house_data.csv" 
+
+
+
+```{r}
+
+# Current working directory
+curr_work_dir <- getwd()
+cat("Current working directory:", curr_work_dir, "\n") 
+
+```
+
+
+```{r}
+
+# defining path
+new_path <- "C:/Users/........."
+
+# New working directory
+new_dir <- setwd(new_path)
+cat("New working directory:", new_dir, "\n")
+
+```
+
+
+
+```{r}
+
+# CSV file name 
+file_name <- "moskow_house_data.csv" 
+
+# File path
+file_path <- file.path(new_dir, file_name)
+
+# Reading CSV file
+df <- read.csv(file_path)
+
+```
+
+
+```{r}
+cat("========= Display Dataset ==========\n")
+rows <- head(df)
+cat("First few rows of the dataset:\n")
+print(rows)
+
+```
+
+
+```{r}
+# Class
+cat(black$bold("========= Dataset class ==========\n"))
+cat("\n")
+class_df <- class(df) 
+print(class_df)
+
+```
+
+
+```{r}
+
+# Dimension
+
+cat(black$bold("========= Data frame dimension ==========\n"))
+cat("\n")
+dim_df <- dim(df)
+print(dim_df)
+
+```
+
+
+```{r}
+
+# Structure 
+cat(black$bold("========= Data frame structure ==========\n"))
+cat("\n") 
+str_df <- str(df) 
+print(str_df)
+
+```
+
+
+```{r}
+
+# Summary Statistics 
+cat(black$bold("========= Data frame statistics ==========\n"))
+cat("\n")
+basic_stats <- summary(df) 
+print(basic_stats)
+
+```
+
+
+
+```{r}
+# Data Types 
+cat(black$bold("========= Data frame data types ==========\n")) 
+cat("\n") 
+data_types <- sapply(df,class) 
+print(data_types) 
+
+```
+
+
+```{r}
+
+# Drop unnecessary columns
+df_new <- df[ , !(names(df) %in% "Metro.station")]
+head(df_new)
+
+```
+
+
+
+```{r}
+# Missing values 
+cat(black$bold("========= Total missing values ==========\n")) 
+sum(is.na(df_new))
+
+cat("\n")
+cat(black$bold("========= Missing values in each column ==========\n")) 
+cat("\n")
+colSums(is.na(df_new))
+
+```
+
+
+
+```{r}
+
+# Handling Missing values 
+cat(black$bold("========= Handling missing values ==========\n")) 
+my_data <- na.omit(df_new)  
+sum(is.na(my_data)) 
+
+cat("\n")
+cat(black$bold("========= Missing values after handling ==========\n")) 
+cat("\n")
+colSums(is.na(my_data))   
+
+```
+
+
+
+```{r}
+
+# Character columns to factors
+my_data[] <- lapply(my_data, function(col) {
+  if (is.character(col)) as.factor(col) else col
+})
+
+# Numeric columns
+numeric_cols <- names(my_data)[sapply(my_data, is.numeric)]
+
+# Categorical columns
+categorical_cols <- names(my_data)[sapply(my_data, is.factor)]
+
+
+# Printing numeric columns
+cat(black$bold("========= Numeric Columns: ==========\n")) 
+cat("\n")
+print(numeric_cols)
+
+
+# Printing categorical columns 
+cat("\n")
+cat(black$bold("========= Categorical Columns and Their Levels: ==========\n")) 
+for (col in categorical_cols) {
+  cat("\nColumn:", col, "\n")
+  print(levels(my_data[[col]]))
+}
+
+```
+
+
+```{r}
+
+# Mapping levels 
+level_list <- lapply(categorical_cols, function(col) {
+  levels_vec <- levels(my_data[[col]])
+  data.frame(
+    Column = col,
+    Level = levels_vec,
+    Code = seq_along(levels_vec) - 1  # Start from 0
+  )
+})
+
+# Map data frame
+levels_df <- do.call(rbind, level_list)
+
+# Displaying data frame
+print(levels_df)
+
+```
+
+
+
+```{r}
+
+# Factors into integers
+
+for (col in categorical_cols) {
+  my_data[[col]] <- as.integer(my_data[[col]]) - 1
+}
+
+head(my_data)
+
+```
+
+
+
+```{r}
+
+# Normalizing 
+preproc <- preProcess(my_data, method = c("range"))
+my_data <- predict(preproc, my_data)
+
+```
+
+
+
+#############################################################################
+
+
+
+
+# Correlations with the Target Variable
+
+
+```{r}
+
+# Defining Target Variable
+target <- "Price"
+
+# Removing target from features
+numeric_features <- my_data[, setdiff(numeric_cols, target)]
+
+```
+
+
+
+```{r}
+
+# Pearson Correlation 
+cor_values <- sapply(numeric_features, function(x) cor(x, my_data[[target]], 
+                                                    use = "complete.obs")) 
+
+```
+
+
+
+```{r}
+
+# Correlations data frame 
+cor_df <- data.frame(
+  Feature = names(cor_values),
+  Correlation = as.vector(cor_values)  
+)
+
+```
+
+
+
+```{r}
+# Sorting absolute correlation 
+cor_df <- cor_df[order(-abs(cor_df$Correlation)), ]
+
+```
+
+
+
+```{r}
+
+# Displaying the results
+print(cor_df)
+
+```
+
+
+
+```{r}
+
+# Correlations Bar plot 
+ggplot(cor_df, aes(x = reorder(Feature, abs(Correlation)), y = Correlation, 
+       fill = Correlation > 0)) +
+       geom_col(show.legend = FALSE) +
+       coord_flip() +
+       labs(title = "Feature Correlations with Target",
+       x = "Feature",
+       y = "Correlation") +
+       scale_fill_manual(values = c("TRUE" = "darkcyan", "FALSE" = "tomato")) +
+       theme_minimal()
+
+
+```
+
+
+
+```{r}
+
+# Features with Correlation > 0.5 
+sig_corr_features <- subset(cor_df, Correlation > 0.5)$Feature
+print(sig_corr_features)
+
+```
+
+
+
+```{r}
+
+# Significant Correlation (> 0.5) Bar plot
+sig_corr_df <- subset(cor_df, Correlation > 0.5)
+
+
+ggplot(sig_corr_df, aes(x = reorder(Feature, Correlation), y = Correlation)) +
+  geom_bar(stat = "identity", fill = "darkcyan") +
+  coord_flip() +  # Flip for better readability
+  labs(title = "Features with Significant Correlation (> 0.5)",
+       x = "Feature",
+       y = "Correlation") +
+  theme_minimal()
+
+
+```
+
+
+
+#############################################################################
+
+
+
+
+# Linear Regresson Model with Full Data 
+
+
+
+```{r}
+
+# Setting seed 
+set.seed(123)
+
+
+# Linear Regression Model with full data 
+model_full_data <- lm(Price ~ .,  data = my_data)
+
+
+# Model Summary 
+cat(black$bold("========= Model Summary with full data: ==========\n")) 
+cat("\n")
+summary(model_full_data)
+
+
+```
+
+
+
+```{r}
+
+model_summary_full_data <- summary(model_full_data)
+
+
+# Coefficients matrix
+coef_matrix <- model_summary_full_data$coefficients
+
+
+# Coefficients with p-value < 0.05 
+significant_vars <- coef_matrix[coef_matrix[, "Pr(>|t|)"] < 0.05, ]
+
+
+# Formatting columns 
+formatted_vars <- as.data.frame(
+  apply(significant_vars, 2, function(x) formatC(x, format = "f", digits = 6))
+)
+
+# Significant variables
+cat(black$bold("========= Significant variables: ==========\n")) 
+cat("\n")
+print(formatted_vars)
+
+
+```
+
+
+
+```{r}
+
+# Predictions with full data
+predictions <- predict(model_full_data, newdata = my_data)
+
+
+# Accuracy Metrics 
+actuals <- my_data$Price
+RMSE_full_data <- sqrt(mean((predictions - actuals)^2))
+MAE_full_data <- mean(abs(predictions - actuals))
+R2_full_data <- 1 - sum((predictions - actuals)^2) / sum((actuals - mean(actuals))^2)
+
+
+# Displaying Metrics
+cat(black$bold("========= Linear Regression Model Accuracy with full dataset: ==========\n")) 
+cat("\n")
+cat("RMSE with full dataset: ", round(RMSE_full_data,6), "\n")
+cat("MAE with full dataset: ", round(MAE_full_data,6), "\n")
+cat("R-squared with full dataset: ", round(R2_full_data,6), "\n")
+
+
+```
+
+
+###########################################################################
+
+
+
+
+# Train-Test Data 
+
+
+```{r}
+
+# Setting seed 
+set.seed(234)
+
+
+# Splitting into training (70%) and testing (30%)
+train_index <- createDataPartition(my_data$Price, p = 0.7, list = FALSE)
+train_data <- my_data[train_index, ]
+test_data <- my_data[-train_index, ]
+
+
+# Training Linear Regression Model
+model_train <- lm(Price ~ ., data = train_data)
+
+
+# Model Summary
+cat(black$bold("========= Train-Test Data Model Summary: ==========\n")) 
+cat("\n") 
+summary(model_train)
+
+
+```
+
+
+
+```{r}
+
+# Predictions on test data
+predictions <- predict(model_train, newdata = test_data)
+
+
+# Accuracy Metrics 
+actuals <- test_data$Price
+RMSE_train_test <- sqrt(mean((predictions - actuals)^2))
+MAE_train_test <- mean(abs(predictions - actuals))
+R2_train_test <- 1 - sum((predictions - actuals)^2) / sum((actuals - mean(actuals))^2)
+
+
+# Displaying Accuracy Metrics 
+cat(black$bold("========= Linear Regression Model Accuracy on Test Data: ==========\n")) 
+cat("\n") 
+cat("RMSE TT: ", round(RMSE_train_test, 6), "\n")
+cat("MAE TT: ", round(MAE_train_test, 6), "\n")
+cat("R-squared TT: ", round(R2_train_test, 6), "\n")
+
+
+```
+
+
+############################################################################
+
+
+
+
+# Forward Selection with Train-Test data
+
+
+```{r}
+
+# Setting seed 
+set.seed(345)
+
+
+# Full and null models
+full_model <- lm(Price ~ ., data = train_data)
+null_model <- lm(Price ~ 1, data = train_data)
+
+```
+
+
+
+```{r}
+
+# Forward Selection
+forward_model <- step(null_model, scope = formula(full_model), 
+                      direction = "forward", trace = 0)
+forward_summary <- summary(forward_model)
+cat(black$bold("========= Forward Model Summary: ==========\n")) 
+cat("\n") 
+forward_summary
+
+
+```
+
+
+```{r}
+
+cat(black$bold("========= Forward Selection Results: ==========\n")) 
+cat("\n") 
+
+# Significant features (p-value < 0.05) 
+forward_significant <- names(coef(forward_model))[which(forward_summary$coefficients[,4] < 0.05)]
+cat("Significant Features:\n", forward_significant[-1], "\n")  # Exclude intercept
+
+
+# p-values 
+cat("\n")
+cat(black$bold("================= P-values: ===================\n")) 
+cat("\n") 
+pvals_fm <- forward_summary$coefficients[, 4]
+print(format(round(pvals_fm, 6), nsmall = 6, scientific = FALSE))
+
+
+# Linear equation 
+cat("\n")
+cat(black$bold("================= Linear Equation: ===================\n")) 
+cat("\n") 
+coefs_fwd <- coef(forward_model)
+cat("House Price = ", round(coefs_fwd[1], 3))
+for (i in 2:length(coefs_fwd)) {
+  cat(" +", round(coefs_fwd[i], 3), "*", names(coefs_fwd)[i])
+}
+
+
+```
+
+
+
+```{r}
+
+# Predicting on test data 
+predictions <- predict(forward_model, newdata = test_data)
+
+actuals <- test_data$Price
+
+
+# Accuracy Metrics 
+RMSE_forward <- sqrt(mean((predictions - actuals)^2))
+MAE_forward <- mean(abs(predictions - actuals))
+R2_forward <- 1 - sum((predictions - actuals)^2) / sum((actuals - mean(actuals))^2)
+
+
+# Displaying Accuracy Metrics 
+cat(black$bold("============= Forward Selection Model Accuracy on Test Data: ==============\n")) 
+cat("\n") 
+cat("RMSE Forward Selection Model: ", round(RMSE_forward, 6), "\n")
+cat("MAE Forward Selection Model: ", round(MAE_forward, 6), "\n")
+cat("R-squared Forward Selection Model: ", round(R2_forward, 6), "\n")
+
+
+```
+
+
+#############################################################################
+
+
+
+# Backward Elimination with Train-Test data
+
+
+
+```{r}
+
+# Setting seed 
+set.seed(456)
+
+
+backward_model <- step(full_model, direction = "backward", trace = 0)
+backward_summary <- summary(backward_model)
+cat(black$bold("============= Backward Elimination Model Accuracy on Test Data: ==============\n")) 
+cat("\n") 
+backward_summary
+
+
+```
+
+
+
+```{r}
+
+cat(black$bold("=============== Backward Elimination Results: ================\n")) 
+cat("\n") 
+
+# Significant features 
+backward_significant <- names(coef(backward_model))[which(backward_summary$coefficients[,4] < 0.05)]
+cat("Significant Features:\n", backward_significant[-1], "\n")  # Exclude intercept
+
+
+# p-values 
+cat("\n")
+cat(black$bold("==================== P-values: =====================\n")) 
+cat("\n") 
+pvals_bm <- backward_summary$coefficients[, 4]
+print(format(round(pvals_bm, 6), nsmall = 6, scientific = FALSE))
+
+
+# Linear equation 
+cat("\n") 
+cat(black$bold("==================== Linear Equation: =====================\n")) 
+cat("\n")
+coefs_bwd <- coef(backward_model)
+cat("House Price = ", round(coefs_bwd[1], 3))
+for (i in 2:length(coefs_bwd)) {
+  cat(" +", round(coefs_bwd[i], 3), "*", names(coefs_bwd)[i])
+}
+
+```
+
+
+
+```{r}
+
+# Predicting on test data 
+predictions <- predict(backward_model, newdata = test_data)
+actuals <- test_data$Price
+
+
+# Accuracy Metrics 
+RMSE_backward <- sqrt(mean((predictions - actuals)^2))
+MAE_backward <- mean(abs(predictions - actuals))
+R2_backward <- 1 - sum((predictions - actuals)^2) / sum((actuals - mean(actuals))^2)
+
+
+# Displaying Accuracy Metrics 
+cat(black$bold("================ Backward Elimination Model Accuracy on Test Data: =================\n")) 
+cat("\n") 
+cat("RMSE Backward Elimination Model: ", round(RMSE_backward, 6), "\n")
+cat("MAE Backward Elimination Model: ", round(MAE_backward, 6), "\n")
+cat("R-squared Backward Elimination Model: ", round(R2_backward, 6), "\n")
+
+
+```
+
+
+
+##############################################################################
+
+
+
+# K-Fold Cross Validation with Train-Test data
+
+
+
+```{r}
+
+# Setting seed 
+set.seed(567) 
+
+
+# Number of folds 
+k <- 5 
+
+# Creating k-folds 
+folds <- createFolds(my_data$Price, k = k, list = TRUE, returnTrain = TRUE) 
+
+
+```
+
+
+
+```{r}
+
+# Initializing vectors for accuracy metrics 
+RMSE_kf_fm <- MAE_kf_fm <- R2_kf_fm <- numeric(k) 
+RMSE_kf_bm <- MAE_kf_bm <- R2_kf_bm <- numeric(k) 
+
+```
+
+
+
+```{r}
+
+# Looping through each fold 
+for (i in 1:k) { 
+
+cat("Fold", i, "\n") 
+
+train_index <- folds[[i]] 
+train_data <- my_data[train_index, ] 
+test_data <- my_data[-train_index, ] 
+
+
+# Fitting null and full models on training data 
+null_model <- lm(Price ~ 1, data = train_data) 
+full_model <- lm(Price ~ ., data = train_data) 
+
+
+# Forward Selection 
+forward_model <- step(null_model, scope = formula(full_model), direction = "forward", trace = 0) 
+predictions_fwd <- predict(forward_model, newdata = test_data) 
+
+
+actuals <- test_data$Price   
+RMSE_kf_fm[i] <- sqrt(mean((predictions_fwd - actuals)^2)) 
+MAE_kf_fm[i] <- mean(abs(predictions_fwd - actuals)) 
+R2_kf_fm[i] <- 1 - sum((predictions_fwd - actuals)^2) / sum((actuals - mean(actuals))^2) 
+
+
+
+###############################################################################################
+
+
+
+# Backward Elimination  
+
+backward_model <- step(full_model, direction = "backward", trace = 0)  
+predictions_bwd <- predict(backward_model, newdata = test_data) 
+
+
+RMSE_kf_bm[i] <- sqrt(mean((predictions_bwd - actuals)^2)) 
+MAE_kf_bm[i] <- mean(abs(predictions_bwd - actuals)) 
+R2_kf_bm[i] <- 1 - sum((predictions_bwd - actuals)^2) / sum((actuals - mean(actuals))^2) 
+
+}
+
+
+```
+
+
+
+```{r}
+
+# Average metrics across k folds for Forward Selection 
+
+cat(black$bold("================ k-Fold Cross-Validation Results for Forward Selection: =================\n")) 
+cat("\n") 
+cat("Average RMSE: ", round(mean(RMSE_kf_fm), 4), "\n") 
+cat("Average MAE: ", round(mean(MAE_kf_fm), 4), "\n") 
+cat("Average R²: ", round(mean(R2_kf_fm), 4), "\n") 
+
+
+```
+
+
+
+```{r}
+
+# Average metrics across k folds for Backward Elimination
+
+cat(black$bold("================ k-Fold Cross-Validation Results for Backward Elimination: =================\n")) 
+cat("\n") 
+cat("Average RMSE: ", round(mean(RMSE_kf_bm), 4), "\n") 
+cat("Average MAE: ", round(mean(MAE_kf_bm), 4), "\n") 
+cat("Average R²: ", round(mean(R2_kf_bm), 4), "\n") 
+
+```
+
+
+
+```{r}
+
+# Metrics data frame
+model_comparison <- data.frame(
+  Method = c("Full Data LM", "Train Test Data Model", "Forward Selection", "Backward Elimination", 
+             "K-Fold CV Forward", "K-Fold CV Backward"),
+  RMSE = c(RMSE_full_data[1], RMSE_train_test[1], RMSE_forward[1], RMSE_backward[1], RMSE_kf_fm[1], RMSE_kf_bm[1]),
+  MAE = c(MAE_full_data[1], MAE_train_test[1], MAE_forward[1], MAE_backward[1], MAE_kf_fm[1], MAE_kf_bm[1]),
+  R_Squared = c(R2_full_data[1], R2_train_test[1], R2_forward[1], R2_backward[1], R2_kf_fm[1], R2_kf_bm[1])
+)
+
+
+```
+
+
+
+```{r}
+
+# Printing the data frame
+print(model_comparison)
+
+```
+
+
+
+##############################################################################
+
+
+
+# Visualizing Combined Metrics results
+
+
+
+```{r}
+
+# Melting the data frame 
+model_comparison_long <- melt(model_comparison, id.vars = "Method", 
+                              variable.name = "Metric", value.name = "Value")
+
+```
+
+
+
+```{r}
+
+# custom colors 
+custom_colors <- c(
+  "RMSE" = "darkcyan",   # blue
+  "MAE" = "darkorange",  # orange
+  "R_Squared" = "lightgreen"      # green
+)
+
+
+
+cat(black$bold("================ Combined Metrics Results: =================\n")) 
+cat("\n") 
+
+# Metrics grouped bar plot 
+
+ggplot(model_comparison_long, aes(x = Method, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9), width = 0.9) +
+  geom_text(aes(label = sprintf("%.4f", Value)), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.3, size = 3) +
+  scale_fill_manual(values = custom_colors) +  # Apply custom colors
+  labs(title = "Combined Results",
+       x = "Modeling Method",
+       y = "Metric Value") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+
+```
+
+
+
+#############################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
